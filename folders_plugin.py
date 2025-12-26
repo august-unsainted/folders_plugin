@@ -6,8 +6,6 @@ from ui.alert import AlertDialogBuilder
 from client_utils import get_messages_controller
 from base_plugin import BasePlugin, MenuItemData, MenuItemType
 
-from utils import *
-
 
 __id__ = "folders"
 __name__ = "Folders"
@@ -30,26 +28,11 @@ def reverse_value(text: str) -> str:
     return text.replace("✔️ ", "") if is_active(text) else "✔️ " + text
 
 
-def sort_folders(folders_names: list[str], folders_ids: list[int]) -> tuple[list[int], list[int]]:
-    active, inactive = [], []
-    for i in range(len(folders_names)):
-        folder_name = folders_names[i]
-        folder_id = folders_ids[i]
-        if is_active(folder_name):
-            active.append(folder_id)
-        else:
-            inactive.append(folder_id)
-    return active, inactive
-
-
-NotificationCenter = find_class("org.telegram.messenger.NotificationCenter")
-
-
 class FoldersPlugin(BasePlugin):
     def __init__(self):
         super().__init__()
+        self.archive = None
         self.controller = None
-        self.nc = None
         self.folders_names = None
         self.folders_ids = None
         self.folders = None
@@ -101,7 +84,7 @@ class FoldersPlugin(BasePlugin):
         raw_folders = get_messages_controller().getDialogFilters().clone()
         ids = []
         names = []
-        raw_folders.removeFirst()
+        self.archive = raw_folders.removeFirst()
 
         for i in range(raw_folders.size()):
             folder = raw_folders.get(i)
@@ -111,41 +94,28 @@ class FoldersPlugin(BasePlugin):
         self.folders = raw_folders
         self.folders_ids = ids
         self.folders_names = names
-        self.nc = NotificationCenter.getGlobalInstance()
         self.controller = get_messages_controller()
         self.build_dialog(activity, chat_id)
 
     def save_folders(self, dialog: AlertDialogBuilder, chat_id: int):
-        active, inactive = sort_folders(self.folders_names, self.folders_ids)
-        log(f"Активные: {active}\nНеактивные: {inactive}")
-        log(f"IDs: {self.folders_ids}\nNames: {self.folders_names}\nFolders: {self.folders}")
-
-        for folder_id in active:
-            index = self.folders_ids.index(folder_id)
+        for index, folder_id in enumerate(self.folders_ids):
             folder = self.folders.get(index)
-            name = folder.name
+            checked = is_active(self.folders_names[index])
             always_show = get_private_field(folder, "alwaysShow")
-            log(f"Папка {name} до: " + str(always_show))
-            if not always_show.contains(chat_id):
-                always_show.add(chat_id)
+            is_contains = always_show.contains(chat_id)
+            if checked:
+                self.controller.deleteDialog(chat_id, 2)
+                if not is_contains:
+                    # self.archive
+                    always_show.add(chat_id)
+            else:
+                if always_show.contains(chat_id):
+                    always_show.remove(always_show.indexOf(chat_id))
             set_private_field(folder, "alwaysShow", always_show)
-            log(f"Папка {name} после: " + str(get_private_field(folder, "alwaysShow")))
-            self.controller.deleteDialog(chat_id, 2)
             self.controller.updateFilterDialogs(folder)
 
-        for folder_id in inactive:
-            index = self.folders_ids.index(folder_id)
-            folder = self.folders.get(index)
-            self.controller.updateFilterDialogs(folder)
-            always_show = get_private_field(folder, "alwaysShow")
-            if always_show.contains(chat_id):
-                always_show.remove(always_show.indexOf(chat_id))
-                set_private_field(folder, "alwaysShow", always_show)
-
-        self.reload_ui()
         log("Folders saved!")
         dialog.dismiss()
 
-    def reload_ui(self):
-        self.nc.postNotificationName(NotificationCenter.dialogFiltersUpdated)
-        self.nc.postNotificationName(NotificationCenter.dialogsNeedReload)
+    def to_archive(self, chat_id: int):
+        pass
