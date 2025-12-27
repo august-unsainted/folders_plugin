@@ -80,6 +80,7 @@ class FoldersPlugin(BasePlugin):
         self.folders = raw_folders
         self.folders_ids = ids
         self.folders_names = names
+        self.load_folders(chat_id)
         self.build_dialog(activity, chat_id)
 
     def build_dialog(self, activity, chat_id):
@@ -90,7 +91,6 @@ class FoldersPlugin(BasePlugin):
 
         builder = AlertDialogBuilder(activity)
         builder.set_title("Выберите папки")
-        self.load_folders(chat_id)
         builder.set_items(self.folders_names, on_item_click)
         builder.set_negative_button("Отмена", lambda b, w: b.dismiss())
         save_func = lambda dialog, _, chat=chat_id: self.save_folders(dialog, chat)
@@ -104,7 +104,7 @@ class FoldersPlugin(BasePlugin):
             always_show = self.get_dialogs(folder)
             is_contains = always_show.contains(chat_id)
             if checked and not is_contains:
-                # self.archive
+                self.controller.addDialogToFolder(chat_id, 1, -1, 0)
                 always_show.add(chat_id)
             elif not checked and is_contains:
                 always_show.remove(always_show.indexOf(chat_id))
@@ -124,6 +124,3 @@ class FoldersPlugin(BasePlugin):
     @staticmethod
     def get_dialogs(folder):
         return get_private_field(folder, "alwaysShow")
-
-    def to_archive(self, chat_id: int):
-        pass
