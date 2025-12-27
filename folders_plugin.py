@@ -1,7 +1,7 @@
 from typing import Any, Dict
 
 import android_utils
-from hook_utils import get_private_field, set_private_field, find_class
+from hook_utils import get_private_field, set_private_field
 from ui.alert import AlertDialogBuilder
 from client_utils import get_messages_controller
 from base_plugin import BasePlugin, MenuItemData, MenuItemType
@@ -42,7 +42,7 @@ class FoldersPlugin(BasePlugin):
         self.add_menu_item(
             MenuItemData(
                 menu_type=MenuItemType.PROFILE_ACTION_MENU,
-                text="Log User Info",
+                text="Редактировать папки",
                 on_click=self.handle_profile_click,
                 icon="user_search"  # Example icon
             )
@@ -50,7 +50,7 @@ class FoldersPlugin(BasePlugin):
         self.add_menu_item(
             MenuItemData(
                 menu_type=MenuItemType.CHAT_ACTION_MENU,
-                text="Log User Info",
+                text="Редактировать папки",
                 on_click=self.handle_profile_click,
                 icon="user_search"  # Example icon
             )
@@ -58,20 +58,6 @@ class FoldersPlugin(BasePlugin):
 
     def on_plugin_unload(self):
         log("Plugin unloaded")
-
-    def build_dialog(self, activity, chat_id):
-        def on_item_click(bld: AlertDialogBuilder, index: int):
-            bld.get_dialog()
-            self.folders_names[index] = reverse_value(self.folders_names[index])
-            self.build_dialog(activity, chat_id)
-
-        builder = AlertDialogBuilder(activity)
-        builder.set_title("Выберите папки")
-        builder.set_items(self.folders_names, on_item_click)
-        builder.set_negative_button("Отмена", lambda b, w: b.dismiss())
-        builder.set_positive_button("Сохранить",
-                                    lambda dialog, _, cid=chat_id: self.save_folders(dialog, cid))
-        builder.show()
 
     def handle_profile_click(self, context: Dict[str, Any]):
         fragment = context.get("fragment")
@@ -81,11 +67,11 @@ class FoldersPlugin(BasePlugin):
         if not activity:
             log("Cannot show dialog, no parent activity.")
 
-        raw_folders = get_messages_controller().getDialogFilters().clone()
-        ids = []
-        names = []
+        self.controller = get_messages_controller()
+        raw_folders = self.controller.getDialogFilters().clone()
         self.archive = raw_folders.removeFirst()
 
+        ids, names = [], []
         for i in range(raw_folders.size()):
             folder = raw_folders.get(i)
             ids.append(folder.id)
@@ -94,28 +80,50 @@ class FoldersPlugin(BasePlugin):
         self.folders = raw_folders
         self.folders_ids = ids
         self.folders_names = names
-        self.controller = get_messages_controller()
         self.build_dialog(activity, chat_id)
+
+    def build_dialog(self, activity, chat_id):
+        def on_item_click(bld: AlertDialogBuilder, index: int):
+            bld.get_dialog()
+            self.folders_names[index] = reverse_value(self.folders_names[index])
+            self.build_dialog(activity, chat_id)
+
+        builder = AlertDialogBuilder(activity)
+        builder.set_title("Выберите папки")
+        self.load_folders(chat_id)
+        builder.set_items(self.folders_names, on_item_click)
+        builder.set_negative_button("Отмена", lambda b, w: b.dismiss())
+        save_func = lambda dialog, _, chat=chat_id: self.save_folders(dialog, chat)
+        builder.set_positive_button("Сохранить", save_func)
+        builder.show()
 
     def save_folders(self, dialog: AlertDialogBuilder, chat_id: int):
         for index, folder_id in enumerate(self.folders_ids):
             folder = self.folders.get(index)
             checked = is_active(self.folders_names[index])
-            always_show = get_private_field(folder, "alwaysShow")
+            always_show = self.get_dialogs(folder)
             is_contains = always_show.contains(chat_id)
-            if checked:
-                self.controller.deleteDialog(chat_id, 2)
-                if not is_contains:
-                    # self.archive
-                    always_show.add(chat_id)
-            else:
-                if always_show.contains(chat_id):
-                    always_show.remove(always_show.indexOf(chat_id))
+            if checked and not is_contains:
+                # self.archive
+                always_show.add(chat_id)
+            elif not checked and is_contains:
+                always_show.remove(always_show.indexOf(chat_id))
             set_private_field(folder, "alwaysShow", always_show)
             self.controller.updateFilterDialogs(folder)
 
         log("Folders saved!")
         dialog.dismiss()
+
+    def load_folders(self, chat_id: int) -> None:
+        for i, folder_name in enumerate(self.folders_names):
+            folder = self.folders.get(i)
+            dialogs = self.get_dialogs(folder)
+            if dialogs.contains(chat_id):
+                self.folders_names[i] = reverse_value(folder_name)
+
+    @staticmethod
+    def get_dialogs(folder):
+        return get_private_field(folder, "alwaysShow")
 
     def to_archive(self, chat_id: int):
         pass
