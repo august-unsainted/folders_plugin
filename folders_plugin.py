@@ -1,7 +1,7 @@
 from typing import Any, Dict
 
 import android_utils
-from hook_utils import get_private_field, set_private_field
+from hook_utils import get_private_field, set_private_field, find_class
 from ui.alert import AlertDialogBuilder
 from client_utils import get_messages_controller
 from base_plugin import BasePlugin, MenuItemData, MenuItemType
@@ -14,6 +14,7 @@ __author__ = "@mhidt"
 __version__ = "1.0.0"
 __icon__ = "exteraPlugins/1"
 __min_version__ = "11.12.0"
+DialogObject = find_class("org.telegram.messenger.DialogObject")
 
 
 def log(text: str):
@@ -61,7 +62,8 @@ class FoldersPlugin(BasePlugin):
 
     def handle_profile_click(self, context: Dict[str, Any]):
         fragment = context.get("fragment")
-        chat_id = context.get("dialog_id") or context.get("chatId")
+        chat = context.get("chatId")
+        chat_id = context.get("dialog_id") or (-chat if chat else None) or context.get("userId")
         log(f"Message menu item clicked! Chat ID : {chat_id}")
         activity = fragment.getParentActivity()
         if not activity:
