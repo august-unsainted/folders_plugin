@@ -18,7 +18,7 @@ __name__ = "Folders"
 __description__ = "Quick edit folders"
 __author__ = "@mhidt"
 __version__ = "1.0.0"
-__icon__ = "exteraPlugins/1"
+__icon__ = "dolbbbb_by_fStikBot/7"
 __min_version__ = "11.12.0"
 
 
